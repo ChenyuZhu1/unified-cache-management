@@ -29,31 +29,35 @@
 
 namespace UC {
 
-class DramTsfTask {
-public:
-    using Type = CCStore::Task::Type;
-    // using Location = CCStore::Task::Location; // 这个不再需要了，因为只有D2H和H2D两种传输
+class DramTsfTask : public CCStore::Task {
+// public:
+//     using Type = CCStore::Task::Type;
+//     // using Location = CCStore::Task::Location; // 这个不再需要了，因为只有D2H和H2D两种传输
 
-public:
-    DramTsfTask(const Type type, const std::string& blockId,
-            const size_t offset, const uintptr_t address, const size_t length)
-        : type{type}, blockId{blockId}, offset{offset}, address{address},
-          length{length}, owner{0}, waiter{nullptr}
-    {
-    }
-    DramTsfTask() : DramTsfTask{Type::DUMP, {}, 0, 0, 0} {} // 无参构造函数
+// public:
+//     DramTsfTask(const Type type, const std::string& blockId,
+//             const size_t offset, const uintptr_t address, const size_t length)
+//         : type{type}, blockId{blockId}, offset{offset}, address{address},
+//           length{length}, owner{0}, waiter{nullptr}
+//     {
+//     }
+//     DramTsfTask() : DramTsfTask{Type::DUMP, {}, 0, 0, 0} {} // 无参构造函数
 
-public:
-    Type type;
-    // Location location; // 不需要了
-    std::string blockId; // 对于一个task来说，这个bloockID和下一行的offset还是需要的，因为它们本质上是上层传来的。（参考dramstore.py.cc）
-    size_t offset;
-    uintptr_t address; // 在显卡上的地址
-    size_t length; // 数据传输的长度
+// public:
+//     Type type;
+//     // Location location; // 不需要了
+//     std::string blockId; // 对于一个task来说，这个bloockID和下一行的offset还是需要的，因为它们本质上是上层传来的。（参考dramstore.py.cc）
+//     size_t offset;
+//     uintptr_t address; // 在显卡上的地址
+//     size_t length; // 数据传输的长度
 
-    size_t owner; // 大的Task的TaskId
+//     size_t owner; // 大的Task的TaskId
+//     std::shared_ptr<DramTsfTaskWaiter> waiter;
+//     // std::shared_ptr<std::byte> hub; // 在nfsstore中，这个的意思是中转站（对于nfsstore来说，host的目的就是数据中转），因此在dram_connector中不再需要
+
+    // TODO(chenyu): 这个是继承之外，新加的
     std::shared_ptr<DramTsfTaskWaiter> waiter;
-    // std::shared_ptr<std::byte> hub; // 在nfsstore中，这个的意思是中转站（对于nfsstore来说，host的目的就是数据中转），因此在dram_connector中不再需要
+    size_t taskId;
 };
 
 } // namespace UC

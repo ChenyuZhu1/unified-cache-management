@@ -84,12 +84,14 @@ public:
     }
 
     size_t Submit(Task&& task) override {
-        std::list<DramTsfTask> tasks;
-        for (auto& shard : task.shards) {
-            tasks.push_back({task.type, shard.block, shard.offset, shard.address, task.size});
-        }
         size_t taskId;
-        return this->transMgr_.Submit(tasks, task.number * task.size, task.number, task.brief, taskId).Success() ? taskId : CCStore::invalidTaskId;
+        auto* p = dynamic_cast<DramTsfTask*>(&task);
+        if (!p) {
+            throw std::bad_cast{};
+        }
+        DramTsfTask& targetTask = *p;
+        size_t taskId;
+        return this->transMgr_.Submit(targetTask, task.number * task.size, task.number, task.brief, taskId).Success() ? taskId : CCStore::invalidTaskId;
     }
 
     int32_t Wait(const size_t task) override {

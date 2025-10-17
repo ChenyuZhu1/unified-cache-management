@@ -38,7 +38,7 @@ Status DramTsfTaskManager::Setup(const int32_t deviceId, const size_t streamNumb
     return Status::OK();
 }
 
-Status DramTsfTaskManager::Submit(std::list<DramTsfTask>& tasks, const size_t size, const size_t number,
+Status DramTsfTaskManager::Submit(DramTsfTask& task, const size_t size, const size_t number,
                               const std::string& brief, size_t& taskId)
 {
     std::unique_lock<std::mutex> lk(this->_mutex);
@@ -46,13 +46,16 @@ Status DramTsfTaskManager::Submit(std::list<DramTsfTask>& tasks, const size_t si
     auto [iter, success] = this->_waiters.emplace(
         taskId, std::make_shared<DramTsfTaskWaiter>(taskId, size, number, brief));
     if (!success) { return Status::OutOfMemory(); }
-    std::vector<std::list<DramTsfTask>> lists;
-    this->Dispatch(tasks, lists, taskId, iter->second);
-    for (size_t i = 0; i < lists.size(); i++) {
-        if (lists[i].empty()) { continue; }
-        this->_queues[this->_qIdx]->Push(lists[i]);
-        this->_qIdx = (this->_qIdx + 1) % this->_queues.size();
-    }
+    // std::vector<std::list<DramTsfTask>> lists;
+    // this->Dispatch(tasks, lists, taskId, iter->second);
+    // for (size_t i = 0; i < lists.size(); i++) {
+    //     if (lists[i].empty()) { continue; }
+    //     this->_queues[this->_qIdx]->Push(lists[i]);
+    //     this->_qIdx = (this->_qIdx + 1) % this->_queues.size();
+    // }
+    task.waiter = iter->second;
+    task.taskId = taskId;
+    this->_queue->Push(task);
     return Status::OK();
 }
 
@@ -85,22 +88,22 @@ Status DramTsfTaskManager::Check(const size_t taskId, bool& finish)
     return Status::OK();
 }
 
-void DramTsfTaskManager::Dispatch(std::list<DramTsfTask>& tasks, std::vector<std::list<DramTsfTask>>& targets,
-                              const size_t taskId, std::shared_ptr<DramTsfTaskWaiter> waiter) const
-{
-    auto qNumber = this->_queues.size();
-    auto index = size_t(0);
-    targets.resize(qNumber);
-    auto it = tasks.begin();
-    while (it != tasks.end()) {
-        auto next = std::next(it);
-        it->owner = taskId;
-        it->waiter = waiter;
-        auto& target = targets[index % qNumber];
-        target.splice(target.end(), tasks, it);
-        index++;
-        it = next;
-    }
-}
+// void DramTsfTaskManager::Dispatch(std::list<DramTsfTask>& tasks, std::vector<std::list<DramTsfTask>>& targets,
+//                               const size_t taskId, std::shared_ptr<DramTsfTaskWaiter> waiter) const
+// {
+//     auto qNumber = this->_queues.size();
+//     auto index = size_t(0);
+//     targets.resize(qNumber);
+//     auto it = tasks.begin();
+//     while (it != tasks.end()) {
+//         auto next = std::next(it);
+//         it->owner = taskId;
+//         it->waiter = waiter;
+//         auto& target = targets[index % qNumber];
+//         target.splice(target.end(), tasks, it);
+//         index++;
+//         it = next;
+//     }
+// }
 
 } // namespace UC

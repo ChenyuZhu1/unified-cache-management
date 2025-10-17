@@ -36,21 +36,21 @@ public:
     Status Setup(const int32_t deviceId, const size_t streamNumber, 
                 //  const size_t bufferSize, const size_t bufferNumber, // 这两个可能不需要，对于dram来说，因为这个buffer是用来数据中转的？
                  const size_t timeoutMs, MemoryPool* memPool);
-    Status Submit(std::list<DramTsfTask>& tasks, const size_t size, const size_t number,
+    Status Submit(DramTsfTask& task, const size_t size, const size_t number,
                   const std::string& brief, size_t& taskId);
     Status Wait(const size_t taskId);
     Status Check(const size_t taskId, bool& finish);
 
-private:
-    void Dispatch(std::list<DramTsfTask>& tasks, std::vector<std::list<DramTsfTask>>& targets,
-                  const size_t taskId, std::shared_ptr<DramTsfTaskWaiter> waiter) const;
+// private:
+    // void Dispatch(std::list<DramTsfTask>& tasks, std::vector<std::list<DramTsfTask>>& targets,
+    //               const size_t taskId, std::shared_ptr<DramTsfTaskWaiter> waiter) const;
 
 private:
     std::mutex _mutex;
     DramTsfTaskSet _failureSet;
     std::unordered_map<size_t, std::shared_ptr<DramTsfTaskWaiter>> _waiters;
-    std::vector<std::unique_ptr<DramTsfTaskQueue>> _queues;
-    size_t _qIdx{0};
+    std::unique_ptr<DramTsfTaskQueue> _queue;
+    // size_t _qIdx{0};
     size_t _taskIdSeed{0};
     size_t _timeoutMs{0};
 };

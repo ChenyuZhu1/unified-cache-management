@@ -27,6 +27,7 @@
 #include <list>
 #include <string>
 #include <cstdint>
+#include "time/stopwatch.h"
 
 namespace UC {
 

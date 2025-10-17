@@ -36,7 +36,7 @@ class DramTsfTaskQueue {
 public:
     Status Setup(const int32_t deviceId, 
                  DramTsfTaskSet* failureSet, MemoryPool* memPool);
-    void Push(std::list<DramTsfTask>& tasks);
+    void Push(DramTsfTask& tasks);
 
 private:
     void StreamOper(DramTsfTask& task);

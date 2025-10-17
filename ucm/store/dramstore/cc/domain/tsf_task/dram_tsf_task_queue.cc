@@ -26,10 +26,9 @@
 
 namespace UC {
 
-#define UC_TASK_ERROR(s, t)                                                                        \
+#define UC_DRAM_TASK_ERROR(s, t)                                                                   \
     do {                                                                                           \
-        UC_ERROR("Failed({}) to run task({},{},{},{}).", (s), (t).owner, (t).blockId, (t).offset,  \
-                 (t).length);                                                                      \
+        UC_ERROR("Failed({}) to run task({}).", (s), (t).taskId);                                  \
     } while (0)
 
 Status DramTsfTaskQueue::Setup(const int32_t deviceId, DramTsfTaskSet* failureSet, MemoryPool* memPool)
@@ -47,14 +46,14 @@ Status DramTsfTaskQueue::Setup(const int32_t deviceId, DramTsfTaskSet* failureSe
     return Status::OK();
 }
 
-void DramTsfTaskQueue::Push(std::list<DramTsfTask>& tasks)
+void DramTsfTaskQueue::Push(DramTsfTask& task)
 {
-    this->_streamOper.Push(tasks);
+    this->_streamOper.Push(task);
 }
 
 void DramTsfTaskQueue::StreamOper(DramTsfTask& task)
 {
-    if (this->_failureSet->Contains(task.owner)) {
+    if (this->_failureSet->Contains(task.taskId)) {
         this->Done(task, false);
         return;
     }
@@ -69,26 +68,45 @@ void DramTsfTaskQueue::StreamOper(DramTsfTask& task)
 void DramTsfTaskQueue::H2D(DramTsfTask& task)
 {
     // TODO 这里地址要重新写逻辑
-    auto block_addr = this->_memPool->GetAddress(task.blockId);
-    auto host_src = block_addr + task.offset;
-    if (!host_src) {
-        UC_TASK_ERROR(Status::Error(), task);
-        this->Done(task, false);
-        return;
+    // auto block_addr = this->_memPool->GetAddress(task.blockId);
+    // auto host_src = block_addr + task.offset;
+    // if (!host_src) {
+    //     UC_DRAM_TASK_ERROR(Status::Error(), task);
+    //     this->Done(task, false);
+    //     return;
+    // }
+
+    uintptr_t host[task.number] = {0};
+    uintptr_t dev[task.number] = {0};
+
+    for (auto& shard : task.shards) {
+        auto idx = shard.index;
+        auto block_addr = this->_memPool->GetAddress(shard.block);
+        auto host_src = block_addr + shard.offset;
+        if (!host_src) {
+            UC_DRAM_TASK_ERROR(Status::Error(), task);
+            this->Done(task, false);
+            return;
+        }
+        host[idx] = (uintptr_t)host_src;
+        dev[idx] = shard.address;
     }
-    auto status = this->_device->H2DAsync((std::byte*)task.address, (std::byte*)host_src, task.length);
+
+    // auto status = this->_device->H2DAsync((std::byte*)task.address, (std::byte*)host_src, task.length);
+    auto status = this->_device->H2DBatch(host, dev, task.number, task.size);
+
     if (status.Failure()) {
-        UC_TASK_ERROR(status, task);
+        UC_DRAM_TASK_ERROR(status, task);
         this->Done(task, false);
         return;
     }
     status = this->_device->AppendCallback([this, task](bool success) mutable {
-        if (!success) { UC_TASK_ERROR(Status::Error(), task); }
+        if (!success) { UC_DRAM_TASK_ERROR(Status::Error(), task); }
         this->Done(task, success);
         // 这里是否需要return？
     });
     if (status.Failure()) {
-        UC_TASK_ERROR(status, task);
+        UC_DRAM_TASK_ERROR(status, task);
         this->Done(task, false);
         return;
     }
@@ -97,40 +115,59 @@ void DramTsfTaskQueue::H2D(DramTsfTask& task)
 // 这个函数也是重点要重新实现的。
 void DramTsfTaskQueue::D2H(DramTsfTask& task)
 {
-    // TODO 这里地址要重新写逻辑
-    auto block_addr = this->_memPool->GetAddress(task.blockId);
-    if (!block_addr) {
-        // 如果还没有，那么临时分配
-        this->_memPool->NewBlock(task.blockId);
-        block_addr = this->_memPool->GetAddress(task.blockId);
-        if (!block_addr) {
-            UC_TASK_ERROR(Status::Error(), task);
+    // // TODO 这里地址要重新写逻辑
+    // auto block_addr = this->_memPool->GetAddress(task.blockId);
+    // if (!block_addr) {
+    //     // 如果还没有，那么临时分配
+    //     this->_memPool->NewBlock(task.blockId);
+    //     block_addr = this->_memPool->GetAddress(task.blockId);
+    //     if (!block_addr) {
+    //         UC_DRAM_TASK_ERROR(Status::Error(), task);
+    //         this->Done(task, false);
+    //         return;
+    //     }
+    // }
+    // auto host_dst = block_addr + task.offset;
+    // if (!host_dst) {
+    //     UC_DRAM_TASK_ERROR(Status::Error(), task);
+    //     this->Done(task, false);
+    //     return;
+    // }
+
+    uintptr_t host[task.number] = {0};
+    uintptr_t dev[task.number] = {0};
+
+    for (auto& shard : task.shards) {
+        auto idx = shard.index;
+        auto block_addr = this->_memPool->GetAddress(shard.block);
+        auto host_src = block_addr + shard.offset;
+        if (!host_src) {
+            UC_DRAM_TASK_ERROR(Status::Error(), task);
             this->Done(task, false);
             return;
         }
+        host[idx] = (uintptr_t)host_src;
+        dev[idx] = shard.address;
     }
-    auto host_dst = block_addr + task.offset;
-    if (!host_dst) {
-        UC_TASK_ERROR(Status::Error(), task);
-        this->Done(task, false);
-        return;
-    }
-    auto status = this->_device->D2HAsync((std::byte*)host_dst, (std::byte*)task.address, task.length);
+
+    // auto status = this->_device->D2HAsync((std::byte*)host_dst, (std::byte*)task.address, task.length);
+    auto status = this->_device->D2HBatch(host, dev, task.number, task.size);
+
     if (status.Failure()) {
-        UC_TASK_ERROR(status, task);
+        UC_DRAM_TASK_ERROR(status, task);
         this->Done(task, false);
         return;
     }
     status = this->_device->AppendCallback([this, task](bool success) mutable {
         if (!success) {
-            UC_TASK_ERROR(Status::Error(), task);
+            UC_DRAM_TASK_ERROR(Status::Error(), task);
             this->Done(task, false);
             return; // 这里是否需要return？
         }
         this->Done(task, true);
     });
     if (status.Failure()) {
-        UC_TASK_ERROR(status, task);
+        UC_DRAM_TASK_ERROR(status, task);
         this->Done(task, false);
         return;
     }
@@ -138,7 +175,7 @@ void DramTsfTaskQueue::D2H(DramTsfTask& task)
 
 void DramTsfTaskQueue::Done(const DramTsfTask& task, bool success)
 {
-    if (!success) { this->_failureSet->Insert(task.owner); }
+    if (!success) { this->_failureSet->Insert(task.taskId); }
     task.waiter->Done();
 }
 
