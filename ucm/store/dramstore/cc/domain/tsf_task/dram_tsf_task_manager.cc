@@ -53,9 +53,9 @@ Status DramTsfTaskManager::Submit(DramTsfTask& task, const size_t size, const si
     //     this->_queues[this->_qIdx]->Push(lists[i]);
     //     this->_qIdx = (this->_qIdx + 1) % this->_queues.size();
     // }
-    task.waiter = iter->second;
+    task.waiter = iter->second.get();
     task.taskId = taskId;
-    this->_queue->Push(task);
+    this->_queue->Push(std::move(task));
     return Status::OK();
 }
 
